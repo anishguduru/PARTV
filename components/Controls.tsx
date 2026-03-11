@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AlgorithmType, InteractionMode, Viewport } from '../types.ts';
 
 /**
@@ -20,6 +20,7 @@ interface ControlsProps {
   onRun: () => void;
   onReset: () => void;
   onClearBlockages: () => void;
+  onClearCache: () => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFetchRoads: () => void;
   isRunning: boolean;
@@ -37,9 +38,35 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = ({
-  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, darkMode, setDarkMode, onStartTutorial
+  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onClearCache, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, darkMode, setDarkMode, onStartTutorial
 }) => {
   const [isVisible, setIsVisible] = useState(true);
+  const [showFullName, setShowFullName] = useState(false);
+  const hoverTimeoutRef = useRef<number | null>(null);
+
+  const startHoverTimer = () => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setShowFullName(true);
+    }, 800); // 800ms delay
+  };
+
+  const clearHoverTimer = () => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    setShowFullName(false);
+  };
+
+  const handleMouseMove = () => {
+    if (!showFullName) {
+      startHoverTimer();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
 
   // Stop click events from bubbling to the map canvas below
   const preventPropagation = (e: React.MouseEvent | React.TouchEvent) => {
@@ -99,8 +126,19 @@ export const Controls: React.FC<ControlsProps> = ({
     >
       {/* Header & Global Toggles */}
       <div className={`flex justify-between items-start border-b pb-2 mb-2 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div>
-          <h1 className="text-xl font-bold leading-tight">GeoPath Explorer</h1>
+        <div 
+          className="relative group"
+          onMouseEnter={startHoverTimer}
+          onMouseLeave={clearHoverTimer}
+          onMouseMove={handleMouseMove}
+          onClick={() => setShowFullName(!showFullName)}
+        >
+          <h1 className="text-2xl font-black tracking-tighter leading-tight">PARTV</h1>
+          {showFullName && (
+            <div className={`absolute top-full left-0 mt-1 p-2 rounded shadow-lg z-50 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap border ${darkMode ? 'bg-gray-800 border-gray-700 text-blue-400' : 'bg-white border-gray-200 text-blue-600'}`}>
+              Pathfinding Algorithm RealTime Visualizer
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
             <button onClick={onStartTutorial} className={`p-1.5 rounded transition ${darkMode ? 'text-blue-400 hover:bg-gray-800' : 'text-blue-600 hover:bg-gray-200'}`}>
@@ -131,9 +169,20 @@ export const Controls: React.FC<ControlsProps> = ({
       <div id="ctrl-load" className={`flex flex-col gap-2 p-2 rounded border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
          <div className="flex justify-between items-center">
              <span className="text-xs opacity-70">Current View</span>
-             <span className={`text-xs font-bold ${canFetch ? 'text-green-500' : 'text-orange-500'}`}>
-                 {canFetch ? 'Ready to Load' : 'Zoom in to level 12'}
-             </span>
+             <div className="flex gap-2 items-center">
+                {hasGraph && (
+                    <button 
+                        onClick={onClearCache}
+                        className={`text-[10px] px-2 py-0.5 rounded border transition ${darkMode ? 'border-red-500/50 text-red-400 hover:bg-red-500/20' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
+                        title="Clear all map data"
+                    >
+                        Clear Cache
+                    </button>
+                )}
+                <span className={`text-xs font-bold ${canFetch ? 'text-green-500' : 'text-orange-500'}`}>
+                    {canFetch ? 'Ready to Load' : 'Zoom in to level 12'}
+                </span>
+             </div>
          </div>
          <button 
             onClick={onFetchRoads} disabled={!canFetch || isLoading}

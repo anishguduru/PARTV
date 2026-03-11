@@ -89,10 +89,16 @@ export const buildAdjacencyList = (nodes: Map<string, GraphNode>, edges: GraphEd
     if (!adjacency.has(edge.sourceId)) adjacency.set(edge.sourceId, []);
     if (!adjacency.has(edge.targetId)) adjacency.set(edge.targetId, []);
 
-    // Undirected graph assumption: Roads are traversable both ways
-    // (A real navigation app would handle one-way streets here)
-    adjacency.get(edge.sourceId)?.push({ nodeId: edge.targetId, edgeId: edge.id, weight: edge.weight });
-    adjacency.get(edge.targetId)?.push({ nodeId: edge.sourceId, edgeId: edge.id, weight: edge.weight });
+    // Handle one-way streets
+    const isForward = !edge.oneway || !edge.isReversed;
+    const isBackward = !edge.oneway || edge.isReversed;
+
+    if (isForward) {
+      adjacency.get(edge.sourceId)?.push({ nodeId: edge.targetId, edgeId: edge.id, weight: edge.weight });
+    }
+    if (isBackward) {
+      adjacency.get(edge.targetId)?.push({ nodeId: edge.sourceId, edgeId: edge.id, weight: edge.weight });
+    }
   });
 
   return adjacency;
@@ -131,14 +137,28 @@ export const parseOSMData = (xmlText: string): GraphData => {
   for (let i = 0; i < ways.length; i++) {
     const way = ways[i];
     
-    // Determine if this 'way' is actually a road
+    // Determine if this 'way' is actually a road and if it's one-way
     let isRoad = false;
+    let oneway = false;
+    let isReversed = false;
     const tags = way.getElementsByTagName("tag");
     for(let t=0; t<tags.length; t++) {
         const k = tags[t].getAttribute("k");
+        const v = tags[t].getAttribute("v");
         if(k === "highway") {
             isRoad = true;
-            break;
+        }
+        if(k === "oneway") {
+            if(v === "yes" || v === "1" || v === "true") {
+                oneway = true;
+            } else if(v === "-1") {
+                oneway = true;
+                isReversed = true;
+            }
+        }
+        // Junctions like roundabouts are implicitly one-way
+        if(k === "junction" && v === "roundabout") {
+            oneway = true;
         }
     }
     
@@ -161,7 +181,9 @@ export const parseOSMData = (xmlText: string): GraphData => {
             id: `e-${srcId}-${trgId}-${i}-${j}`, // Unique ID for React keys/lookup
             sourceId: srcId,
             targetId: trgId,
-            weight
+            weight,
+            oneway,
+            isReversed
           });
         }
       }
@@ -190,4 +212,50 @@ export const parseOSMData = (xmlText: string): GraphData => {
     adjacency: buildAdjacencyList(finalNodesMap, edges),
     bounds: { minLat, maxLat, minLon, maxLon }
   };
+};
+
+/**
+ * Calculates a penalty for turning between two road segments.
+ * A sharp turn (like a U-turn) should have a high penalty.
+ * 
+ * @param nodeA Previous node
+ * @param nodeB Current node (intersection)
+ * @param nodeC Next node
+ * @returns Penalty in meters
+ */
+export const calculateTurnPenalty = (nodeA: GraphNode, nodeB: GraphNode, nodeC: GraphNode): number => {
+  // Vector AB
+  const v1x = nodeB.lon - nodeA.lon;
+  const v1y = nodeB.lat - nodeA.lat;
+  
+  // Vector BC
+  const v2x = nodeC.lon - nodeB.lon;
+  const v2y = nodeC.lat - nodeB.lat;
+  
+  // Normalize vectors
+  const mag1 = Math.sqrt(v1x * v1x + v1y * v1y);
+  const mag2 = Math.sqrt(v2x * v2x + v2y * v2y);
+  
+  if (mag1 === 0 || mag2 === 0) return 0;
+  
+  const dot = (v1x * v2x + v1y * v2y) / (mag1 * mag2);
+  
+  // dot is cos(theta) where theta is the angle between vectors.
+  // theta = 0 (dot = 1) means straight line.
+  // theta = 180 (dot = -1) means U-turn.
+  
+  // We want to penalize dot close to -1.
+  // A simple penalty: (1 - dot) * factor
+  // If dot = 1 (straight), penalty = 0
+  // If dot = 0 (90 deg), penalty = factor
+  // If dot = -1 (U-turn), penalty = 2 * factor
+  
+  // Let's use a more aggressive penalty for U-turns.
+  if (dot < -0.8) { // Sharp turn / U-turn
+      return 500; // 500 meters penalty
+  } else if (dot < 0) { // More than 90 degree turn
+      return 50; // 50 meters penalty
+  }
+  
+  return 0;
 };

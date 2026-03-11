@@ -23,7 +23,7 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    title: "Welcome to GeoPath Explorer",
+    title: "Welcome to PARTV",
     content: (
       <p>
         This tool allows you to visualize how computer algorithms find paths through real-world road networks.

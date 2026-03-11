@@ -27,6 +27,7 @@ interface MapCanvasProps {
   setViewport: (v: Viewport) => void;
   onNodeClick: (nodeId: string) => void;
   onEdgeClick: (edgeId: string) => void;
+  onMapClick: (lat: number, lon: number) => void;
   darkMode: boolean;
 }
 
@@ -47,6 +48,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
   setViewport,
   onNodeClick,
   onEdgeClick,
+  onMapClick,
   darkMode,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -599,7 +601,6 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
    * Translates a click event on screen into a Node or Edge selection in the Graph.
    */
   const handleClick = (cx: number, cy: number) => {
-     if (!graph) return;
      const rect = containerRef.current!.getBoundingClientRect();
      const x = cx - rect.left;
      const y = cy - rect.top;
@@ -620,16 +621,25 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
          let closestNodeId: string | null = null;
          let minDist = Infinity;
          const THRESHOLD = 30; // pixels
-         graph.nodes.forEach(node => {
-             const p = lngLatToPoint(node.lon, node.lat, viewport.zoom);
-             const dist = Math.sqrt(Math.pow(p.x - worldX, 2) + Math.pow(p.y - worldY, 2));
-             if (dist < minDist) { minDist = dist; closestNodeId = node.id; }
-         });
-         if (minDist < THRESHOLD && closestNodeId) { onNodeClick(closestNodeId); return; }
+         if (graph) {
+             graph.nodes.forEach(node => {
+                 const p = lngLatToPoint(node.lon, node.lat, viewport.zoom);
+                 const dist = Math.sqrt(Math.pow(p.x - worldX, 2) + Math.pow(p.y - worldY, 2));
+                 if (dist < minDist) { minDist = dist; closestNodeId = node.id; }
+             });
+         }
+         if (minDist < THRESHOLD && closestNodeId) { 
+             onNodeClick(closestNodeId); 
+             return; 
+         } else {
+             const clickedLL = pointToLngLat(worldX, worldY, viewport.zoom);
+             onMapClick(clickedLL.lat, clickedLL.lon);
+             return;
+         }
      }
 
      // 2. Check Edges (Point-to-Line-Segment distance check)
-     if (mode === InteractionMode.BLOCK_ROAD) {
+     if (mode === InteractionMode.BLOCK_ROAD && graph) {
          let closestEdgeId: string | null = null;
          let minEdgeDist = Infinity;
          

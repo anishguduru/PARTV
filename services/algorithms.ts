@@ -1,6 +1,6 @@
 import { GraphData, PathResult, AlgorithmType } from '../types';
 import { PriorityQueue } from './priorityQueue';
-import { calculateDistance } from './graphUtils';
+import { calculateDistance, calculateTurnPenalty } from './graphUtils';
 
 /**
  * services/algorithms.ts
@@ -124,7 +124,19 @@ export const findPath = (
         if (currentDist === undefined) continue; 
 
         // New distance to neighbor = distance to current + edge weight
-        const newDist = currentDist + neighbor.weight;
+        let newDist = currentDist + neighbor.weight;
+        
+        // Apply turn penalty if we have a grandparent
+        const grandparentId = previous.get(currentId);
+        if (grandparentId) {
+            const nodeA = graph.nodes.get(grandparentId);
+            const nodeB = graph.nodes.get(currentId);
+            const nodeC = graph.nodes.get(neighbor.nodeId);
+            if (nodeA && nodeB && nodeC) {
+                newDist += calculateTurnPenalty(nodeA, nodeB, nodeC);
+            }
+        }
+
         const existingDist = distances.get(neighbor.nodeId);
 
         // Relaxation Step: If we found a shorter way to this neighbor, update it

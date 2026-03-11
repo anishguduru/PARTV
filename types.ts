@@ -28,6 +28,8 @@ export interface GraphEdge {
   sourceId: string; // Start Node ID
   targetId: string; // End Node ID
   weight: number;   // Physical distance in meters (Cost to travel)
+  oneway?: boolean; // If true, only traversable from source to target
+  isReversed?: boolean; // If true and oneway is true, only traversable from target to source
 }
 
 // The complete Graph structure.

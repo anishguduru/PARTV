@@ -1,5 +1,5 @@
 {
-  "name": "GeoPath Explorer",
-  "description": "A pathfinding visualization tool using real-world OpenStreetMap data to demonstrate Dijkstra, A*, BFS, and DFS algorithms.",
+  "name": "PARTV",
+  "description": "Pathfinding Algorithm RealTime Visualizer (PARTV) - A tool using real-world OpenStreetMap data to demonstrate Dijkstra, A*, BFS, and DFS algorithms.",
   "requestFramePermissions": []
 }

@@ -7,7 +7,7 @@ import { findPath } from './services/algorithms';
 import { fetchOverpassData } from './services/overpass';
 import { GraphData, AlgorithmType, InteractionMode, Viewport } from './types';
 
-console.log('GeoPath Explorer: App component initializing');
+console.log('PARTV: App component initializing');
 
 /**
  * App.tsx
@@ -90,6 +90,15 @@ const App: React.FC = () => {
       setBlockedEdges(new Set());
       handleReset();
   }
+
+  const handleClearCache = () => {
+    setGraph(null);
+    setStartNode(null);
+    setEndNode(null);
+    setWaypointNode(null);
+    setBlockedEdges(new Set());
+    handleReset();
+  };
 
   // Handlers for File Upload and Overpass API are wrappers around service functions
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,6 +385,7 @@ const App: React.FC = () => {
         algorithm={algorithm} setAlgorithm={setAlgorithm}
         mode={mode} setMode={setMode}
         onRun={runVisualization} onReset={handleReset} onClearBlockages={handleClearBlockages}
+        onClearCache={handleClearCache}
         onFileUpload={handleFileUpload} onFetchRoads={handleFetchRoads}
         isRunning={isRunning} isPaused={isPaused} onTogglePause={togglePause}
         isLoading={isLoading} speed={speed} setSpeed={setSpeed}
