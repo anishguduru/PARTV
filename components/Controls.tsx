@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AlgorithmType, InteractionMode, Viewport } from '../types.ts';
+import { AlgorithmType, InteractionMode, Viewport, GraphData } from '../types.ts';
+import { BenchmarkingPanel } from './BenchmarkingPanel.tsx';
 
 /**
  * Controls.tsx
@@ -22,7 +23,7 @@ interface ControlsProps {
   onClearBlockages: () => void;
   onClearCache: () => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onFetchRoads: () => void;
+  onFetchRoads: () => Promise<GraphData | null>;
   isRunning: boolean;
   isPaused: boolean;
   onTogglePause: () => void;
@@ -32,16 +33,18 @@ interface ControlsProps {
   stats: { distance: number, time: number, visited: number } | null;
   viewport: Viewport;
   hasGraph: boolean;
+  graph: GraphData | null;
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
   onStartTutorial: () => void;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
-  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onClearCache, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, darkMode, setDarkMode, onStartTutorial
+  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onClearCache, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, graph, darkMode, setDarkMode, onStartTutorial
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [showFullName, setShowFullName] = useState(false);
+  const [appMode, setAppMode] = useState<'normal' | 'dev'>('normal');
   const hoverTimeoutRef = useRef<number | null>(null);
 
   const startHoverTimer = () => {
@@ -135,7 +138,7 @@ export const Controls: React.FC<ControlsProps> = ({
         >
           <h1 className="text-2xl font-black tracking-tighter leading-tight">PARTV</h1>
           {showFullName && (
-            <div className={`absolute top-full left-0 mt-1 p-2 rounded shadow-lg z-50 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap border ${darkMode ? 'bg-gray-800 border-gray-700 text-blue-400' : 'bg-white border-gray-200 text-blue-600'}`}>
+            <div className={`absolute top-full left-0 mt-1 p-2 rounded shadow-lg z-50 text-[10px] font-bold tracking-widest whitespace-nowrap border text-center ${darkMode ? 'bg-gray-800 border-gray-700 text-blue-400' : 'bg-white border-gray-200 text-blue-600'}`}>
               Pathfinding Algorithm RealTime Visualizer
             </div>
           )}
@@ -165,142 +168,168 @@ export const Controls: React.FC<ControlsProps> = ({
         </div>
       </div>
 
-      {/* Map Download Section */}
-      <div id="ctrl-load" className={`flex flex-col gap-2 p-2 rounded border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-         <div className="flex justify-between items-center">
-             <span className="text-xs opacity-70">Current View</span>
-             <div className="flex gap-2 items-center">
-                {hasGraph && (
-                    <button 
-                        onClick={onClearCache}
-                        className={`text-[10px] px-2 py-0.5 rounded border transition ${darkMode ? 'border-red-500/50 text-red-400 hover:bg-red-500/20' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
-                        title="Clear all map data"
-                    >
-                        Clear Cache
-                    </button>
-                )}
-                <span className={`text-xs font-bold ${canFetch ? 'text-green-500' : 'text-orange-500'}`}>
-                    {canFetch ? 'Ready to Load' : 'Zoom in to level 12'}
-                </span>
-             </div>
-         </div>
-         <button 
-            onClick={onFetchRoads} disabled={!canFetch || isLoading}
-            className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 ${canFetch ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-gray-400/50 text-gray-500 cursor-not-allowed'}`}
-         >
-            {isLoading ? (
-                <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <span>Fetching Roads...</span>
-                </>
-            ) : hasGraph ? '🔄 Reload Area' : '⬇️ Load Roads Here'}
-         </button>
-      </div>
-
-      {/* Algorithm Choice */}
-      <div className="flex flex-col gap-2" id="ctrl-algo">
-        <label className="text-xs font-semibold uppercase tracking-wider opacity-70">Algorithm</label>
-        <select value={algorithm} disabled={isRunning} onChange={(e) => setAlgorithm(e.target.value as AlgorithmType)}
-          className={`rounded p-2 text-sm outline-none border focus:ring-2 ${inputClass} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-          <option value={AlgorithmType.DIJKSTRA}>Dijkstra's Algorithm</option>
-          <option value={AlgorithmType.A_STAR}>A* Search</option>
-          <option value={AlgorithmType.BFS}>Breadth-First Search (BFS)</option>
-          <option value={AlgorithmType.DFS}>Depth-First Search (DFS)</option>
-        </select>
-      </div>
-
-      {/* Interaction Selection */}
-      <div className="flex flex-col gap-2" id="ctrl-modes">
-        <label className="text-xs font-semibold uppercase tracking-wider opacity-70">Interaction Mode</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => setMode(InteractionMode.SELECT_START)} disabled={isRunning}
-            className={`${modeButtonBase} ${mode === InteractionMode.SELECT_START ? modeActiveStart : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <span>📍</span> Set Start
+      {/* Mode Toggle */}
+      <div className="flex flex-col gap-2 mb-2">
+        <label className="text-sm font-medium opacity-80">Mode</label>
+        <div className={`flex rounded-lg p-1 ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
+          <button
+            onClick={() => setAppMode('normal')}
+            className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${appMode === 'normal' ? (darkMode ? 'bg-gray-600 shadow text-white' : 'bg-white shadow text-gray-900') : (darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')}`}
+          >
+            Normal
           </button>
-          <button onClick={() => setMode(InteractionMode.SELECT_END)} disabled={isRunning}
-            className={`${modeButtonBase} ${mode === InteractionMode.SELECT_END ? modeActiveEnd : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <span>🏁</span> Set Target
-          </button>
-          <button onClick={() => setMode(InteractionMode.ADD_WAYPOINT)} disabled={isRunning}
-            className={`${modeButtonBase} ${mode === InteractionMode.ADD_WAYPOINT ? modeActiveWaypoint : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <span>🚩</span> Waypoint
-          </button>
-           <button onClick={() => setMode(InteractionMode.BLOCK_ROAD)} disabled={isRunning}
-            className={`${modeButtonBase} ${mode === InteractionMode.BLOCK_ROAD ? modeActiveBlock : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <span>🚧</span> Block Road
+          <button
+            onClick={() => setAppMode('dev')}
+            className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${appMode === 'dev' ? (darkMode ? 'bg-gray-600 shadow text-white' : 'bg-white shadow text-gray-900') : (darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')}`}
+          >
+            Dev
           </button>
         </div>
       </div>
 
-      {/* Speed Slider with Labels */}
-      <div className="flex flex-col gap-2" id="ctrl-speed">
-        <div className="flex justify-between items-center">
-            <label className="text-xs font-semibold uppercase tracking-wider opacity-70">Simulation Speed</label>
-            <span className="text-[10px] font-mono text-blue-500 font-bold">{speed}x</span>
-        </div>
-        <input type="range" min="1" max="100" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value))}
-          className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-        <div className="flex justify-between px-0.5 text-[9px] font-medium opacity-50 uppercase">
-            <span>1x</span>
-            <span>25x</span>
-            <span>50x</span>
-            <span>75x</span>
-            <span>100x</span>
-        </div>
-      </div>
-
-      {/* Animation Actions */}
-      <div className="flex flex-col gap-2 mt-2" id="ctrl-run">
-        {!isRunning ? (
-            <button onClick={onRun} disabled={!hasGraph}
-                className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2 rounded shadow transition">
-                🚀 Visualize Path
-            </button>
-        ) : (
-            <div className="flex gap-2">
-                <button onClick={onTogglePause}
-                    className={`flex-[2] font-bold py-2 rounded shadow transition flex items-center justify-center gap-2 ${isPaused ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white`}>
-                    {isPaused ? (
-                        <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>Resume</>
-                    ) : (
-                        <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>Pause</>
-                    )}
+      {appMode === 'normal' && (
+        <>
+          {/* Map Download Section */}
+          <div className="flex flex-col gap-2 mb-4" id="ctrl-load">
+            <label className="text-sm font-medium opacity-80">Current View</label>
+            <div className="grid grid-cols-2 gap-2">
+                <button 
+                    onClick={onFetchRoads} disabled={!canFetch || isLoading}
+                    title={!canFetch ? "zoom in to level 12 atleast to load roads" : ""}
+                    className={`p-2 text-xs rounded border transition flex items-center justify-center gap-1.5 ${canFetch ? 'bg-green-600 hover:bg-green-500 text-white border-green-500' : 'bg-gray-400/50 text-gray-500 border-gray-400/50 cursor-not-allowed'}`}
+                >
+                    {isLoading ? (
+                        <>
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span>Fetching...</span>
+                        </>
+                    ) : hasGraph ? '🔄 Reload Area' : '⬇️ Load Roads Here'}
                 </button>
-                <button onClick={onReset} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded shadow transition">Stop</button>
+                <button 
+                    onClick={onClearCache} disabled={!hasGraph}
+                    className={`p-2 text-xs rounded border transition flex items-center justify-center gap-1.5 ${hasGraph ? (darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white border-gray-600' : 'bg-gray-200 hover:bg-gray-300 text-gray-800 border-gray-300') : (darkMode ? 'bg-gray-800 text-gray-600 border-gray-700 cursor-not-allowed' : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed')}`}
+                    title="Clear all map data"
+                >
+                    Clear Cache
+                </button>
             </div>
-        )}
-        <div className="flex gap-2">
-            {!isRunning && (
-                <>
-                <button onClick={onReset} className={`flex-1 text-xs py-2 rounded transition ${buttonSecondaryClass}`}>Reset Visuals</button>
-                <button onClick={onClearBlockages} className={`flex-1 text-xs py-2 rounded transition ${buttonSecondaryClass}`}>Clear Blocks</button>
-                </>
+          </div>
+
+          {/* Algorithm Choice */}
+          <div className="flex flex-col gap-2" id="ctrl-algo">
+            <label className="text-sm font-medium opacity-80">Algorithm</label>
+            <select value={algorithm} disabled={isRunning} onChange={(e) => setAlgorithm(e.target.value as AlgorithmType)}
+              className={`rounded p-2 text-sm outline-none border focus:ring-2 ${inputClass} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <option value={AlgorithmType.DIJKSTRA}>Dijkstra's Algorithm</option>
+              <option value={AlgorithmType.A_STAR}>A* Search</option>
+              <option value={AlgorithmType.BFS}>Breadth-First Search (BFS)</option>
+              <option value={AlgorithmType.DFS}>Depth-First Search (DFS)</option>
+            </select>
+          </div>
+
+          {/* Interaction Selection */}
+          <div className="flex flex-col gap-2" id="ctrl-modes">
+            <label className="text-sm font-medium opacity-80">Map Interaction</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode(InteractionMode.SELECT_START)} disabled={isRunning}
+                className={`${modeButtonBase} ${mode === InteractionMode.SELECT_START ? modeActiveStart : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <span>📍</span> Set Start
+              </button>
+              <button onClick={() => setMode(InteractionMode.SELECT_END)} disabled={isRunning}
+                className={`${modeButtonBase} ${mode === InteractionMode.SELECT_END ? modeActiveEnd : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <span>🏁</span> Set Target
+              </button>
+              <button onClick={() => setMode(InteractionMode.ADD_WAYPOINT)} disabled={isRunning}
+                className={`${modeButtonBase} ${mode === InteractionMode.ADD_WAYPOINT ? modeActiveWaypoint : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <span>🚩</span> Waypoint
+              </button>
+               <button onClick={() => setMode(InteractionMode.BLOCK_ROAD)} disabled={isRunning}
+                className={`${modeButtonBase} ${mode === InteractionMode.BLOCK_ROAD ? modeActiveBlock : modeInactive} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <span>🚧</span> Block Road
+              </button>
+            </div>
+          </div>
+
+          {/* Speed Slider with Labels */}
+          <div className="flex flex-col gap-2" id="ctrl-speed">
+            <div className="flex justify-between items-center">
+                <label className="text-sm font-medium opacity-80">Simulation Speed</label>
+                <span className="text-xs text-blue-500 font-bold">{speed}x</span>
+            </div>
+            <input type="range" min="1" max="100" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value))}
+              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+            <div className="flex justify-between px-0.5 text-[9px] font-medium opacity-50">
+                <span>1x</span>
+                <span>25x</span>
+                <span>50x</span>
+                <span>75x</span>
+                <span>100x</span>
+            </div>
+          </div>
+
+          {/* Animation Actions */}
+          <div className="flex flex-col gap-2 mt-2" id="ctrl-run">
+            {!isRunning ? (
+                <button onClick={onRun} disabled={!hasGraph}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2 rounded shadow transition">
+                    🚀 Visualize Path
+                </button>
+            ) : (
+                <div className="flex gap-2">
+                    <button onClick={onTogglePause}
+                        className={`flex-[2] font-bold py-2 rounded shadow transition flex items-center justify-center gap-2 ${isPaused ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-600 hover:bg-yellow-500'} text-white`}>
+                        {isPaused ? (
+                            <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>Resume</>
+                        ) : (
+                            <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>Pause</>
+                        )}
+                    </button>
+                    <button onClick={onReset} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded shadow transition">Stop</button>
+                </div>
             )}
-        </div>
-      </div>
+            <div className="flex gap-2">
+                {!isRunning && (
+                    <>
+                    <button onClick={onReset} className={`flex-1 text-xs py-2 rounded transition ${buttonSecondaryClass}`}>Reset Visuals</button>
+                    <button onClick={onClearBlockages} className={`flex-1 text-xs py-2 rounded transition ${buttonSecondaryClass}`}>Clear Blocks</button>
+                    </>
+                )}
+            </div>
+          </div>
 
-      {/* Algorithm Output Stats */}
-      <div id="ctrl-stats" className={`mt-4 p-3 rounded border text-sm space-y-1 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-        <div className="flex justify-between">
-          <span className="opacity-70">Distance:</span>
-          <span className={`font-mono ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>{stats ? `${(stats.distance / 1000).toFixed(2)} km` : '-'}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="opacity-70">Explored:</span>
-          <span className={`font-mono ${darkMode ? 'text-yellow-300' : 'text-yellow-600'}`}>{stats ? `${stats.visited} nodes` : '-'}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="opacity-70">Time:</span>
-          <span className={`font-mono ${darkMode ? 'text-green-300' : 'text-green-600'}`}>{stats ? `${stats.time.toFixed(2)} ms` : '-'}</span>
-        </div>
-      </div>
+          {/* Algorithm Output Stats */}
+          <div className="flex flex-col gap-2 mt-4" id="ctrl-stats">
+            <label className="text-sm font-medium opacity-80">Results</label>
+            <div className={`p-3 rounded border text-sm space-y-1 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+              <div className="flex justify-between">
+                <span className="opacity-70">Distance:</span>
+                <span className={`font-mono ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>{stats ? `${(stats.distance / 1000).toFixed(2)} km` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-70">Explored:</span>
+                <span className={`font-mono ${darkMode ? 'text-yellow-300' : 'text-yellow-600'}`}>{stats ? `${stats.visited} nodes` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="opacity-70">Time:</span>
+                <span className={`font-mono ${darkMode ? 'text-green-300' : 'text-green-600'}`}>{stats ? `${stats.time.toFixed(2)} ms` : '-'}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
-      <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <label className={`text-[10px] cursor-pointer flex items-center gap-2 ${darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>
-              <span>📂 Advanced: Load custom .osm file</span>
-              <input type="file" accept=".osm,.xml" onChange={onFileUpload} className="hidden" />
-          </label>
-      </div>
+      {appMode === 'dev' && (
+        <>
+          <BenchmarkingPanel graph={graph} darkMode={darkMode} onFetchRoads={onFetchRoads} isLoading={isLoading} canFetch={canFetch} />
+          
+          <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <label className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}>
+                  <span>📂 Load Custom Map (.osm)</span>
+                  <input type="file" accept=".osm,.xml" onChange={onFileUpload} className="hidden" />
+              </label>
+          </div>
+        </>
+      )}
     </div>
   );
 };

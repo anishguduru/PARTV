@@ -53,6 +53,7 @@ export enum AlgorithmType {
   A_STAR = 'A_STAR',     // Shortest path, weighted + heuristic (faster)
   BFS = 'BFS',           // Shortest path by # of hops (unweighted)
   DFS = 'DFS',           // path exploration (not shortest)
+  CUSTOM = 'CUSTOM',     // User uploaded algorithm
 }
 
 // User Interaction States

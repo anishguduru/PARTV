@@ -141,7 +141,7 @@ const App: React.FC = () => {
   const handleFetchRoads = async () => {
       if (viewport.zoom < 12.0) {
           alert("Zoom in closer to load roads (Level 12+).");
-          return;
+          return null;
       }
       setIsLoading(true);
       // Calculate bounding box of current screen
@@ -170,6 +170,7 @@ const App: React.FC = () => {
           const newGraph = parseOSMData(xmlData);
           if (newGraph.nodes.size === 0) {
             alert("No roads found in this area.");
+            return null;
           } else {
             setGraph(newGraph);
             setStartNode(null);
@@ -177,10 +178,12 @@ const App: React.FC = () => {
             setWaypointNode(null);
             handleReset();
             setBlockedEdges(new Set());
+            return newGraph;
           }
       } catch (err: any) {
           console.error("Overpass Fetch Error:", err);
           alert(`Failed to download map data: ${err.message || "Unknown error"}`);
+          return null;
       } finally {
           setIsLoading(false);
       }
@@ -389,7 +392,7 @@ const App: React.FC = () => {
         onFileUpload={handleFileUpload} onFetchRoads={handleFetchRoads}
         isRunning={isRunning} isPaused={isPaused} onTogglePause={togglePause}
         isLoading={isLoading} speed={speed} setSpeed={setSpeed}
-        stats={stats} viewport={viewport} hasGraph={!!graph}
+        stats={stats} viewport={viewport} hasGraph={!!graph} graph={graph}
         darkMode={darkMode} setDarkMode={setDarkMode} onStartTutorial={() => setShowTutorial(true)}
       />
       
@@ -400,7 +403,7 @@ const App: React.FC = () => {
       <MapCanvas graph={graph} path={path} visitedNodes={visitedNodes} visitedParents={visitedParents}
           startNodeId={startNode} endNodeId={endNode} waypointNodeId={waypointNode}
           blockedEdgeIds={blockedEdges} mode={mode} viewport={viewport} setViewport={setViewport}
-          onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick} darkMode={darkMode} />
+          onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick} onMapClick={() => {}} darkMode={darkMode} />
     </div>
   );
 };

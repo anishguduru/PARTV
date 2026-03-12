@@ -372,7 +372,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
         ctx.font = '11px sans-serif';
         const attrText = '© OpenStreetMap contributors' + (darkMode ? ', © CARTO' : '');
         const textMetrics = ctx.measureText(attrText);
-        ctx.fillText(attrText, dimensions.width - textMetrics.width - 12, dimensions.height - 12);
+        ctx.fillText(attrText, dimensions.width - textMetrics.width - 12, 20);
     };
 
     drawRef.current = draw;
@@ -715,7 +715,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       <canvas ref={canvasRef} />
       
       {/* Zoom and Info Panel */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2 pointer-events-none">
+      <div className="absolute bottom-2 right-2 flex flex-col gap-2 pointer-events-none">
         {/* Zoom Level Display */}
         <div className={`px-2 py-1 rounded border text-xs backdrop-blur-sm self-end ${darkMode ? 'bg-gray-900/80 text-gray-400 border-gray-700' : 'bg-white/80 text-gray-600 border-gray-300'}`}>
           Zoom: {viewport.zoom.toFixed(2)}
