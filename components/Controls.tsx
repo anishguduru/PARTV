@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AlgorithmType, InteractionMode, Viewport, GraphData } from '../types.ts';
 import { BenchmarkingPanel } from './BenchmarkingPanel.tsx';
+import { setCustomAlgorithmCode } from '../services/algorithms.ts';
 
 /**
  * Controls.tsx
@@ -37,15 +38,225 @@ interface ControlsProps {
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
   onStartTutorial: () => void;
+  appMode: 'normal' | 'dev';
+  setAppMode: (m: 'normal' | 'dev') => void;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
-  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onClearCache, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, graph, darkMode, setDarkMode, onStartTutorial
+  algorithm, setAlgorithm, mode, setMode, onRun, onReset, onClearBlockages, onClearCache, onFileUpload, onFetchRoads, isRunning, isPaused, onTogglePause, isLoading, speed, setSpeed, stats, viewport, hasGraph, graph, darkMode, setDarkMode, onStartTutorial, appMode, setAppMode
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [showFullName, setShowFullName] = useState(false);
-  const [appMode, setAppMode] = useState<'normal' | 'dev'>('normal');
+  const [customAlgorithmLoaded, setCustomAlgorithmLoaded] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
+
+  const handleCustomAlgorithmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const code = evt.target?.result as string;
+      const success = setCustomAlgorithmCode(code);
+      if (success) {
+        setCustomAlgorithmLoaded(true);
+        alert('Custom algorithm loaded successfully!');
+      } else {
+        alert('Failed to parse custom algorithm script.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
+  const handleDownloadInstructions = () => {
+    const instructions = `
+# Custom Algorithm Upload Instructions
+
+To upload a custom algorithm to the visualizer, you need to provide a JavaScript file with the body of your algorithm function.
+
+## Language
+JavaScript
+
+## Expected Function Signature Arguments
+Your code will be wrapped inside a function that receives these exact variables:
+- \`graph\`: The entire MapData consisting of \`nodes\` (Map), \`edges\` (Array), and \`adjacency\` (Map).
+- \`startId\`: The ID of the starting node (string).
+- \`endId\`: The ID of the target node (string).
+- \`blockedEdgeIds\`: A Set of edge IDs that the user has blocked (Set<string>).
+- \`utilities\`: An object containing helper methods:
+  - \`PriorityQueue\`: A class you can instantiate via \`new utilities.PriorityQueue()\`
+  - \`calculateDistance(lat1, lon1, lat2, lon2)\`: Returns distance in meters.
+  - \`calculateTurnPenalty(nodeA, nodeB, nodeC)\`: Returns penalty distance.
+
+## Expected Return Value
+Your code MUST return an object that matches this \`PathResult\` interface:
+
+\`\`\`javascript
+{
+  path: ["node1", "node2", "node3", ...], // Array of Node IDs forming the final path (Start -> End)
+  visitedOrder: ["node1", "node4", "node2", ...], // Order which nodes were explored (for animation visualization)
+  previous: new Map(), // (Optional) Map of childNodeId -> parentNodeId for drawing the tree
+  totalDistance: 1234.56, // Total distance in meters
+}
+\`\`\`
+*(Note: executionTime is measured automatically, you don't have to return it).*
+
+## Example: Simple BFS
+\`\`\`javascript
+const queue = [startId];
+const visited = new Set([startId]);
+const previous = new Map();
+const visitedOrder = [];
+
+while(queue.length > 0) {
+  const current = queue.shift();
+  visitedOrder.push(current);
+  if (current === endId) break;
+
+  const neighbors = graph.adjacency.get(current) || [];
+  for (const n of neighbors) {
+    if (blockedEdgeIds.has(n.edgeId)) continue;
+    if (!visited.has(n.nodeId)) {
+      visited.add(n.nodeId);
+      previous.set(n.nodeId, current);
+      queue.push(n.nodeId);
+    }
+  }
+}
+
+const path = [];
+let curr = endId;
+while (curr && curr !== startId) {
+  path.unshift(curr);
+  curr = previous.get(curr);
+}
+if (path.length > 0 || startId === endId) path.unshift(startId);
+
+return { path, visitedOrder, previous, totalDistance: 0 };
+\`\`\`
+    `.trim();
+
+    const blob = new Blob([instructions], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'custom-algorithm-instructions.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExampleAlgorithm = () => {
+    const exampleCode = `// custom_algorithm_example.js
+// BI-DIRECTIONAL BFS EXAMPLE
+// A simple example of testing how you might implement a bi-directional unweighted search.
+
+const queueStart = [startId];
+const queueEnd = [endId];
+
+const visitedFromStart = new Set([startId]);
+const visitedFromEnd = new Set([endId]);
+
+const prevStart = new Map();
+const prevEnd = new Map();
+
+const visitedOrder = [];
+let intersectionNode = null;
+
+// While both queues have elements
+while (queueStart.length > 0 && queueEnd.length > 0) {
+    // 1: Expand Start Front
+    const currStart = queueStart.shift();
+    visitedOrder.push(currStart);
+
+    if (visitedFromEnd.has(currStart)) {
+        intersectionNode = currStart;
+        break;
+    }
+
+    const startNeighbors = graph.adjacency.get(currStart) || [];
+    for (const neighbor of startNeighbors) {
+        if (blockedEdgeIds.has(neighbor.edgeId)) continue;
+        if (!visitedFromStart.has(neighbor.nodeId)) {
+            visitedFromStart.add(neighbor.nodeId);
+            prevStart.set(neighbor.nodeId, currStart);
+            queueStart.push(neighbor.nodeId);
+        }
+    }
+
+    // 2: Expand End Front
+    const currEnd = queueEnd.shift();
+    visitedOrder.push(currEnd);
+
+    if (visitedFromStart.has(currEnd)) {
+        intersectionNode = currEnd;
+        break;
+    }
+
+    const endNeighbors = graph.adjacency.get(currEnd) || [];
+    for (const neighbor of endNeighbors) {
+        if (blockedEdgeIds.has(neighbor.edgeId)) continue;
+        if (!visitedFromEnd.has(neighbor.nodeId)) {
+            visitedFromEnd.add(neighbor.nodeId);
+            prevEnd.set(neighbor.nodeId, currEnd);
+            queueEnd.push(neighbor.nodeId);
+        }
+    }
+}
+
+// Reconstruct path if they met
+let path = [];
+let totalDistance = 0;
+
+if (intersectionNode) {
+    // Traverse from intersection back to start
+    let current = intersectionNode;
+    let pathStart = [];
+    while (current) {
+        pathStart.push(current);
+        current = prevStart.get(current);
+    }
+    pathStart.reverse();
+
+    // Traverse from intersection forward to end
+    current = prevEnd.get(intersectionNode);
+    let pathEnd = [];
+    while (current) {
+        pathEnd.push(current);
+        current = prevEnd.get(current);
+    }
+
+    path = [...pathStart, ...pathEnd];
+
+    // Calculate roughly the geographic distance
+    for (let i = 0; i < path.length - 1; i++) {
+        const n1 = graph.nodes.get(path[i]);
+        const n2 = graph.nodes.get(path[i+1]);
+        if (n1 && n2) {
+             totalDistance += utilities.calculateDistance(n1.lat, n1.lon, n2.lat, n2.lon);
+        }
+    }
+}
+
+return {
+    path: path,
+    visitedOrder: visitedOrder,
+    previous: prevStart,
+    totalDistance: totalDistance
+};
+`;
+    const blob = new Blob([exampleCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'custom_algorithm_example.js';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const startHoverTimer = () => {
     if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
@@ -120,7 +331,7 @@ export const Controls: React.FC<ControlsProps> = ({
 
   return (
     <div 
-      className={`absolute top-4 left-4 z-10 w-80 backdrop-blur-md border p-4 rounded-xl shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden ${containerClass}`}
+      className={`absolute top-4 left-4 z-10 w-80 backdrop-blur-md border p-4 rounded-xl shadow-2xl flex flex-col gap-4 max-h-[calc(100dvh-2rem)] overflow-y-auto [&::-webkit-scrollbar]:hidden ${containerClass}`}
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       onClick={preventPropagation}
       onMouseDown={preventPropagation}
@@ -224,6 +435,9 @@ export const Controls: React.FC<ControlsProps> = ({
               <option value={AlgorithmType.A_STAR}>A* Search</option>
               <option value={AlgorithmType.BFS}>Breadth-First Search (BFS)</option>
               <option value={AlgorithmType.DFS}>Depth-First Search (DFS)</option>
+              {customAlgorithmLoaded && (
+                <option value={AlgorithmType.CUSTOM}>Custom Uploaded Algorithm</option>
+              )}
             </select>
           </div>
 
@@ -318,18 +532,38 @@ export const Controls: React.FC<ControlsProps> = ({
         </>
       )}
 
-      {appMode === 'dev' && (
-        <>
-          <BenchmarkingPanel graph={graph} darkMode={darkMode} onFetchRoads={onFetchRoads} isLoading={isLoading} canFetch={canFetch} />
+      <div className="flex flex-col mt-2" style={{ display: appMode === 'dev' ? 'flex' : 'none' }}>
           
-          <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <label className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}>
+          <div className={`flex flex-col gap-2 mb-4`}>
+              <button 
+                  onClick={handleDownloadInstructions}
+                  className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 ${buttonSecondaryClass}`}>
+                  <span>📄 Download Custom Script Instructions</span>
+              </button>
+              <label className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${buttonSecondaryClass}`}>
+                  <span>💻 Upload Custom Algorithm (.js)</span>
+                  <input type="file" accept=".js,.txt" onChange={handleCustomAlgorithmUpload} className="hidden" />
+              </label>
+              
+              <div className="flex justify-center mt-[-4px]">
+                 <button 
+                   onClick={handleDownloadExampleAlgorithm}
+                   className={`text-[10px] underline opacity-70 transition hover:opacity-100 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                 >
+                   Download Example Algorithm for Testing
+                 </button>
+              </div>
+              
+              <label className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${buttonSecondaryClass}`}>
                   <span>📂 Load Custom Map (.osm)</span>
                   <input type="file" accept=".osm,.xml" onChange={onFileUpload} className="hidden" />
               </label>
           </div>
-        </>
-      )}
+
+          <div className="pt-2">
+            <BenchmarkingPanel graph={graph} darkMode={darkMode} onFetchRoads={onFetchRoads} isLoading={isLoading} canFetch={canFetch} customAlgorithmLoaded={customAlgorithmLoaded} viewport={viewport} />
+          </div>
+        </div>
     </div>
   );
 };

@@ -31,6 +31,7 @@ const App: React.FC = () => {
     }
     return true;
   });
+  const [appMode, setAppMode] = useState<'normal' | 'dev'>('normal');
   const [showTutorial, setShowTutorial] = useState(false);
   
   // Data State: The actual graph structure (Nodes and Edges)
@@ -117,6 +118,7 @@ const App: React.FC = () => {
                 alert("No road network nodes found in this file.");
                 return;
             }
+            newGraph.isCustom = true;
             setGraph(newGraph);
             setStartNode(null);
             setEndNode(null);
@@ -349,7 +351,7 @@ const App: React.FC = () => {
 
   // Click handler to set start/end/waypoint based on current interaction mode
   const handleNodeClick = (nodeId: string) => {
-    if (isRunning) return;
+    if (isRunning || appMode === 'dev') return;
     if (path.length > 0) handleReset();
     if (mode === InteractionMode.SELECT_START) setStartNode(nodeId);
     else if (mode === InteractionMode.SELECT_END) setEndNode(nodeId);
@@ -357,6 +359,7 @@ const App: React.FC = () => {
   };
 
   const handleEdgeClick = (edgeId: string) => {
+      if (isRunning || appMode === 'dev') return;
       if (mode === InteractionMode.BLOCK_ROAD) {
           setBlockedEdges(prev => {
               const next = new Set(prev);
@@ -394,6 +397,7 @@ const App: React.FC = () => {
         isLoading={isLoading} speed={speed} setSpeed={setSpeed}
         stats={stats} viewport={viewport} hasGraph={!!graph} graph={graph}
         darkMode={darkMode} setDarkMode={setDarkMode} onStartTutorial={() => setShowTutorial(true)}
+        appMode={appMode} setAppMode={setAppMode}
       />
       
       {/* Tutorial Overlay */}

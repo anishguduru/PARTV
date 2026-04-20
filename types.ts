@@ -45,6 +45,7 @@ export interface GraphData {
     minLon: number;
     maxLon: number;
   };
+  isCustom?: boolean; // Flag to identify if graph was loaded from custom OSM file
 }
 
 // Available Pathfinding Algorithms

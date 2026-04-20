@@ -8,6 +8,8 @@ interface BenchmarkingPanelProps {
   onFetchRoads: () => Promise<GraphData | null>;
   isLoading: boolean;
   canFetch: boolean;
+  customAlgorithmLoaded: boolean;
+  viewport: { lat: number, lon: number, zoom: number };
 }
 
 interface BenchmarkResult {
@@ -19,63 +21,52 @@ interface BenchmarkResult {
   successRate?: number;
 }
 
-export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, darkMode, onFetchRoads, isLoading, canFetch }) => {
-  const [customCode, setCustomCode] = useState<string>('');
+export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, darkMode, onFetchRoads, isLoading, canFetch, customAlgorithmLoaded, viewport }) => {
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [numPaths, setNumPaths] = useState<number>(100);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    readFile(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file || !file.name.endsWith('.js')) {
-      alert("Please upload a .js file.");
-      return;
-    }
-    readFile(file);
-  };
-
-  const readFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const code = event.target?.result as string;
-      setCustomCode(code);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
+  const [executedPathsCount, setExecutedPathsCount] = useState<number>(100);
+  const [lastBenchViewport, setLastBenchViewport] = useState<{lat: number, lon: number, zoom: number} | null>(null);
 
   const runBenchmark = async () => {
     let currentGraph = graph;
-    if (!currentGraph || currentGraph.nodes.size === 0) {
+    
+    let needsNewRoads = false;
+    
+    if (!currentGraph?.isCustom) {
+      if (!currentGraph || currentGraph.nodes.size === 0) {
+        needsNewRoads = true;
+      } else if (lastBenchViewport) {
+        const distLat = Math.abs(viewport.lat - lastBenchViewport.lat);
+        const distLon = Math.abs(viewport.lon - lastBenchViewport.lon);
+        // If moved more than tiny threshold (~100 meters) or changed zoom
+        if (distLat > 0.001 || distLon > 0.001 || viewport.zoom !== lastBenchViewport.zoom) {
+          needsNewRoads = true;
+        }
+      } else {
+        // Fallback for first benchmark if graph exists
+        const graphCenterLat = (currentGraph.bounds.minLat + currentGraph.bounds.maxLat) / 2;
+        const graphCenterLon = (currentGraph.bounds.minLon + currentGraph.bounds.maxLon) / 2;
+        if (Math.abs(viewport.lat - graphCenterLat) > 0.01 || Math.abs(viewport.lon - graphCenterLon) > 0.01) {
+          needsNewRoads = true;
+        }
+      }
+    }
+
+    if (needsNewRoads) {
       if (!canFetch) {
         alert("Please zoom in to level 12+ to load roads for benchmarking.");
         return;
       }
       currentGraph = await onFetchRoads();
-      if (!currentGraph || currentGraph.nodes.size === 0) {
-        return;
-      }
     }
+
+    if (!currentGraph || currentGraph.nodes.size === 0) {
+      alert("No valid graph data available to benchmark.");
+      return;
+    }
+    
+    setLastBenchViewport({...viewport});
 
     setIsBenchmarking(true);
     setResults([]);
@@ -92,7 +83,12 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
       { name: 'Dijkstra', type: AlgorithmType.DIJKSTRA },
       { name: 'A*', type: AlgorithmType.A_STAR },
       { name: 'BFS', type: AlgorithmType.BFS },
+      { name: 'DFS', type: AlgorithmType.DFS },
     ];
+    
+    if (customAlgorithmLoaded) {
+      algorithmsToTest.push({ name: 'Custom (Uploaded)', type: AlgorithmType.CUSTOM });
+    }
 
     const pathsToTest: { start: string, end: string }[] = [];
 
@@ -112,25 +108,6 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
     algorithmsToTest.forEach(algo => {
       aggregatedResults[algo.name] = { time: 0, distance: 0, visited: 0, successCount: 0 };
     });
-    if (customCode) {
-      aggregatedResults['Custom (Uploaded)'] = { time: 0, distance: 0, visited: 0, successCount: 0 };
-    }
-
-    let customFn: Function | null = null;
-    if (customCode) {
-      try {
-        const wrappedCode = `
-          try {
-            ${customCode}
-          } catch (e) {
-            throw e;
-          }
-        `;
-        customFn = new Function('graph', 'startId', 'endId', wrappedCode);
-      } catch (e: any) {
-        alert(`Failed to parse custom algorithm: ${e.message}`);
-      }
-    }
 
     // Run tests for each path
     for (const { start, end } of pathsToTest) {
@@ -146,24 +123,6 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
           }
         } catch (e) {
           // Ignore failures for averaging
-        }
-      }
-
-      // Custom algorithm
-      if (customFn) {
-        try {
-          const startTime = performance.now();
-          const customResult = customFn(currentGraph, start, end);
-          const endTime = performance.now();
-          
-          if (customResult?.path && customResult.path.length > 0) {
-            aggregatedResults['Custom (Uploaded)'].time += customResult?.executionTime !== undefined ? customResult.executionTime : (endTime - startTime);
-            aggregatedResults['Custom (Uploaded)'].distance += customResult?.totalDistance || 0;
-            aggregatedResults['Custom (Uploaded)'].visited += customResult?.visitedOrder ? customResult.visitedOrder.length : 0;
-            aggregatedResults['Custom (Uploaded)'].successCount += 1;
-          }
-        } catch (e: any) {
-          console.error("Custom algorithm error:", e);
         }
       }
     }
@@ -189,68 +148,37 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
       return a.distance - b.distance;
     });
 
+    setExecutedPathsCount(numPaths);
     setResults(newResults);
     setIsBenchmarking(false);
   };
 
   return (
     <div className="flex flex-col gap-4 mt-2">
-      {/* Custom Algorithm Upload */}
-      <div className={`p-3 rounded border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-        <label className="text-xs font-semibold tracking-wider opacity-70 mb-2 block">Custom Algorithm (.js)</label>
-        
-        <div 
-          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : (darkMode ? 'border-gray-600 hover:border-blue-500 bg-gray-800' : 'border-gray-300 hover:border-blue-500 bg-white')}`}
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-        >
-          <input 
-            type="file" 
-            accept=".js" 
-            className="hidden" 
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-          />
-          <div className="flex flex-col items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              {customCode ? 'Algorithm Loaded' : 'Click to upload .js file'}
-            </span>
-            <span className={`text-[10px] ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-              Must return path, visitedOrder, totalDistance, executionTime
-            </span>
-          </div>
-        </div>
-        {customCode && (
-          <div className="mt-2 flex justify-between items-center">
-            <span className="text-xs text-green-500 font-medium">✓ Ready to benchmark</span>
-            <button 
-              onClick={() => setCustomCode('')}
-              className="text-xs text-red-500 hover:underline"
-            >
-              Remove
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Benchmark Configuration */}
-      <div className={`p-3 rounded border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-        <label className="text-sm font-medium opacity-80 mb-2 block">Benchmark Settings</label>
-        <div className="flex items-center justify-between">
-          <span className="text-xs opacity-70">Number of random paths:</span>
-          <input 
-            type="number" 
-            min="1" 
-            max="1000" 
-            value={numPaths} 
-            onChange={(e) => setNumPaths(parseInt(e.target.value) || 100)}
-            className={`w-20 p-1 text-xs rounded border text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-          />
+      <div>
+        <h3 className="text-sm font-medium opacity-80 mb-2 block">Benchmarking</h3>
+        <div className={`p-3 rounded border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs opacity-70">Number of random paths:</span>
+            <input 
+              type="text" 
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={numPaths || ''} 
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val.length > 3) {
+                  val = val.slice(0, 3);
+                }
+                setNumPaths(val === '' ? 0 : parseInt(val, 10));
+              }}
+              onBlur={() => {
+                if (numPaths < 1) setNumPaths(1);
+              }}
+              className={`w-20 p-1 text-xs rounded border text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+            />
+          </div>
         </div>
       </div>
 
@@ -258,7 +186,7 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
       <button 
         onClick={runBenchmark} 
         disabled={isBenchmarking || isLoading || (!graph && !canFetch)}
-        className={`w-full py-2 rounded text-sm font-bold transition flex items-center justify-center gap-2 ${(!graph && !canFetch) ? 'bg-gray-400/50 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+        className={`w-full py-2 rounded text-sm font-bold shadow transition flex items-center justify-center gap-2 ${(!graph && !canFetch) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
       >
         {isBenchmarking || isLoading ? (
           <>
@@ -269,40 +197,73 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
       </button>
 
       {/* Results Panel */}
-      {results.length > 0 && (
-        <div className={`p-3 rounded border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-          <h3 className="text-sm font-medium opacity-80 mb-1">Benchmark Results</h3>
-          <p className="text-[10px] opacity-60 mb-3">Averages over {numPaths} random paths</p>
-          <div className="space-y-3">
-            {results.map((res, idx) => (
+      <div className="mt-2">
+        <h3 className="text-sm font-medium opacity-80 mb-1">Results</h3>
+        <p className="text-[10px] opacity-60 mb-2">Averages over {executedPathsCount} random paths</p>
+        <div className={`p-3 rounded border space-y-3 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+          {(() => {
+            const displayAlgos = ['Dijkstra', 'A*', 'BFS', 'DFS'];
+            if (customAlgorithmLoaded) displayAlgos.push('Custom (Uploaded)');
+            
+            // Sort so the successfully benchmarked ones appear prioritized if they exist,
+            // but if empty, maintains the standard order.
+            let renderList = [...displayAlgos];
+            if (results.length > 0) {
+                renderList.sort((a, b) => {
+                    const resA = results.find(r => r.algorithm === a);
+                    const resB = results.find(r => r.algorithm === b);
+                    if (resA && resB) {
+                        if (!resA.success && !resB.success) return 0;
+                        if (!resA.success) return 1;
+                        if (!resB.success) return -1;
+                        return resA.distance - resB.distance;
+                    }
+                    if (resA) return -1;
+                    if (resB) return 1;
+                    return 0;
+                });
+            }
+
+            return renderList.map((algoName, idx) => {
+              const res = results.find(r => r.algorithm === algoName);
+              const hasRun = !!res;
+              
+              return (
               <div key={idx} className={`p-2 rounded border ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className={`font-bold text-sm ${res.algorithm.includes('Custom') ? 'text-indigo-500' : (darkMode ? 'text-gray-200' : 'text-gray-800')}`}>
-                    {res.algorithm}
+                  <span className={`font-bold text-sm ${algoName.includes('Custom') ? 'text-indigo-500' : (darkMode ? 'text-gray-200' : 'text-gray-800')}`}>
+                    {algoName}
                   </span>
-                  <span className={`text-xs font-bold ${res.successRate !== undefined && res.successRate >= 50 ? 'text-green-500' : 'text-red-500'}`}>
-                    {res.successRate !== undefined ? `${res.successRate.toFixed(0)}% Success` : (res.success ? 'Success' : 'Failed')}
+                  <span className={`text-xs font-bold ${!hasRun ? 'opacity-50' : (res.successRate !== undefined && res.successRate >= 50 ? 'text-green-500' : 'text-red-500')}`}>
+                    {!hasRun ? '-' : (res.successRate !== undefined ? `${res.successRate.toFixed(0)}% Success` : (res.success ? 'Success' : 'Failed'))}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[10px]">
                   <div className="flex flex-col">
                     <span className="opacity-50">Avg Time</span>
-                    <span className={`font-mono font-medium ${darkMode ? 'text-green-300' : 'text-green-600'}`}>{res.time.toFixed(2)} ms</span>
+                    <span className={`font-mono font-medium ${!hasRun ? 'opacity-50' : (darkMode ? 'text-green-300' : 'text-green-600')}`}>
+                       {!hasRun ? '-' : `${res.time.toFixed(2)} ms`}
+                    </span>
                   </div>
                   <div className="flex flex-col">
                     <span className="opacity-50">Avg Dist</span>
-                    <span className={`font-mono font-medium ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>{(res.distance / 1000).toFixed(2)} km</span>
+                    <span className={`font-mono font-medium ${!hasRun ? 'opacity-50' : (darkMode ? 'text-blue-300' : 'text-blue-600')}`}>
+                       {!hasRun ? '-' : `${(res.distance / 1000).toFixed(2)} km`}
+                    </span>
                   </div>
                   <div className="flex flex-col">
                     <span className="opacity-50">Avg Visited</span>
-                    <span className={`font-mono font-medium ${darkMode ? 'text-yellow-300' : 'text-yellow-600'}`}>{res.visited} nodes</span>
+                    <span className={`font-mono font-medium ${!hasRun ? 'opacity-50' : (darkMode ? 'text-yellow-300' : 'text-yellow-600')}`}>
+                       {!hasRun ? '-' : `${res.visited} nodes`}
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+              );
+            });
+          })()}
         </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -10,6 +10,18 @@ import { calculateDistance, calculateTurnPenalty } from './graphUtils';
  * to allow the App to animate the search process.
  */
 
+let customAlgorithmFunction: any = null;
+
+export const setCustomAlgorithmCode = (code: string) => {
+  try {
+    customAlgorithmFunction = new Function('graph', 'startId', 'endId', 'blockedEdgeIds', 'utilities', code);
+    return true;
+  } catch (err) {
+    console.error("Error parsing custom algorithm script:", err);
+    return false;
+  }
+};
+
 export const findPath = (
   graph: GraphData,
   startId: string,
@@ -19,6 +31,27 @@ export const findPath = (
 ): PathResult => {
   const startTime = performance.now();
   
+  if (algorithm === AlgorithmType.CUSTOM) {
+    if (!customAlgorithmFunction) {
+      alert("No custom algorithm loaded.");
+      return { path: [], visitedOrder: [], previous: new Map(), totalDistance: 0, executionTime: 0 };
+    }
+    try {
+      const utilities = {
+        PriorityQueue,
+        calculateDistance,
+        calculateTurnPenalty
+      };
+      const result = customAlgorithmFunction(graph, startId, endId, blockedEdgeIds, utilities);
+      result.executionTime = performance.now() - startTime;
+      return result;
+    } catch (err) {
+      console.error("Custom algorithm failed:", err);
+      alert("Error executing custom algorithm. Check console.");
+      return { path: [], visitedOrder: [], previous: new Map(), totalDistance: 0, executionTime: 0 };
+    }
+  }
+
   // Data structures for the result
   const distances = new Map<string, number>();  // Min distance from start to node
   const previous = new Map<string, string>();   // "Came From" map to reconstruct path
