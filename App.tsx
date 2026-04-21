@@ -3,9 +3,9 @@ import { MapCanvas } from './components/MapCanvas';
 import { Controls } from './components/Controls';
 import { Tutorial } from './components/Tutorial';
 import { parseOSMData, pointToLngLat, lngLatToPoint } from './services/graphUtils';
-import { findPath } from './services/algorithms';
+import { findPath, addCustomAlgorithm, getCustomAlgorithms } from './services/algorithms';
 import { fetchOverpassData } from './services/overpass';
-import { GraphData, AlgorithmType, InteractionMode, Viewport } from './types';
+import { GraphData, AlgorithmType, InteractionMode, Viewport, CustomAlgorithm } from './types';
 
 console.log('PARTV: App component initializing');
 
@@ -33,13 +33,14 @@ const App: React.FC = () => {
   });
   const [appMode, setAppMode] = useState<'normal' | 'dev'>('normal');
   const [showTutorial, setShowTutorial] = useState(false);
+  const [customAlgorithms, setCustomAlgorithms] = useState<CustomAlgorithm[]>([]);
   
   // Data State: The actual graph structure (Nodes and Edges)
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
   // Logic State: Algorithm choices and user selections
-  const [algorithm, setAlgorithm] = useState<AlgorithmType>(AlgorithmType.A_STAR);
+  const [algorithm, setAlgorithm] = useState<string>(AlgorithmType.A_STAR);
   const [mode, setMode] = useState<InteractionMode>(InteractionMode.SELECT_START);
   const [startNode, setStartNode] = useState<string | null>(null);
   const [endNode, setEndNode] = useState<string | null>(null);
@@ -138,6 +139,17 @@ const App: React.FC = () => {
       }, 50);
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
+  const handleCustomAlgorithmUpload = (name: string, code: string) => {
+    try {
+      addCustomAlgorithm(name, code);
+      setCustomAlgorithms(getCustomAlgorithms());
+      return true;
+    } catch (err) {
+      return false;
+    }
   };
 
   const handleFetchRoads = async () => {
@@ -398,6 +410,7 @@ const App: React.FC = () => {
         stats={stats} viewport={viewport} hasGraph={!!graph} graph={graph}
         darkMode={darkMode} setDarkMode={setDarkMode} onStartTutorial={() => setShowTutorial(true)}
         appMode={appMode} setAppMode={setAppMode}
+        customAlgorithms={customAlgorithms} onCustomAlgorithmUpload={handleCustomAlgorithmUpload}
       />
       
       {/* Tutorial Overlay */}

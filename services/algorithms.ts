@@ -1,4 +1,4 @@
-import { GraphData, PathResult, AlgorithmType } from '../types';
+import { GraphData, PathResult, AlgorithmType, CustomAlgorithm } from '../types';
 import { PriorityQueue } from './priorityQueue';
 import { calculateDistance, calculateTurnPenalty } from './graphUtils';
 
@@ -10,46 +10,53 @@ import { calculateDistance, calculateTurnPenalty } from './graphUtils';
  * to allow the App to animate the search process.
  */
 
-let customAlgorithmFunction: any = null;
+const customAlgorithms = new Map<string, CustomAlgorithm>();
 
-export const setCustomAlgorithmCode = (code: string) => {
+export const addCustomAlgorithm = (name: string, code: string): string => {
   try {
-    customAlgorithmFunction = new Function('graph', 'startId', 'endId', 'blockedEdgeIds', 'utilities', code);
-    return true;
+    const id = `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const fn = new Function('graph', 'startId', 'endId', 'blockedEdgeIds', 'utilities', code);
+    customAlgorithms.set(id, { id, name, code, fn });
+    return id;
   } catch (err) {
     console.error("Error parsing custom algorithm script:", err);
-    return false;
+    throw err;
   }
 };
+
+export const getCustomAlgorithms = () => Array.from(customAlgorithms.values());
 
 export const findPath = (
   graph: GraphData,
   startId: string,
   endId: string,
-  algorithm: AlgorithmType,
+  algorithm: string,
   blockedEdgeIds: Set<string>
 ): PathResult => {
   const startTime = performance.now();
   
-  if (algorithm === AlgorithmType.CUSTOM) {
-    if (!customAlgorithmFunction) {
-      alert("No custom algorithm loaded.");
-      return { path: [], visitedOrder: [], previous: new Map(), totalDistance: 0, executionTime: 0 };
-    }
+  const customAlgo = customAlgorithms.get(algorithm);
+  if (customAlgo) {
     try {
       const utilities = {
         PriorityQueue,
         calculateDistance,
         calculateTurnPenalty
       };
-      const result = customAlgorithmFunction(graph, startId, endId, blockedEdgeIds, utilities);
+      const result = customAlgo.fn(graph, startId, endId, blockedEdgeIds, utilities);
       result.executionTime = performance.now() - startTime;
       return result;
     } catch (err) {
-      console.error("Custom algorithm failed:", err);
-      alert("Error executing custom algorithm. Check console.");
+      console.error(`Custom algorithm ${customAlgo.name} failed:`, err);
+      alert(`Error executing ${customAlgo.name}. Check console.`);
       return { path: [], visitedOrder: [], previous: new Map(), totalDistance: 0, executionTime: 0 };
     }
+  }
+
+  // Fallback for old CUSTOM string if used
+  if (algorithm === 'CUSTOM') {
+    alert("Please select a specific custom algorithm from the list.");
+    return { path: [], visitedOrder: [], previous: new Map(), totalDistance: 0, executionTime: 0 };
   }
 
   // Data structures for the result

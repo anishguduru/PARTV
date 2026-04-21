@@ -50,11 +50,19 @@ export interface GraphData {
 
 // Available Pathfinding Algorithms
 export enum AlgorithmType {
-  DIJKSTRA = 'DIJKSTRA', // Shortest path, weighted
-  A_STAR = 'A_STAR',     // Shortest path, weighted + heuristic (faster)
-  BFS = 'BFS',           // Shortest path by # of hops (unweighted)
-  DFS = 'DFS',           // path exploration (not shortest)
-  CUSTOM = 'CUSTOM',     // User uploaded algorithm
+  DIJKSTRA = 'DIJKSTRA',
+  A_STAR = 'A_STAR',
+  BFS = 'BFS',
+  DFS = 'DFS',
+}
+
+export type AnyAlgorithm = AlgorithmType | string;
+
+export interface CustomAlgorithm {
+  id: string;
+  name: string;
+  code: string;
+  fn: Function;
 }
 
 // User Interaction States

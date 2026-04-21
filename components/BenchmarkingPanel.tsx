@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { GraphData, AlgorithmType } from '../types.ts';
+import { GraphData, AlgorithmType, CustomAlgorithm } from '../types.ts';
 import { findPath } from '../services/algorithms.ts';
 
 interface BenchmarkingPanelProps {
@@ -8,12 +8,13 @@ interface BenchmarkingPanelProps {
   onFetchRoads: () => Promise<GraphData | null>;
   isLoading: boolean;
   canFetch: boolean;
-  customAlgorithmLoaded: boolean;
   viewport: { lat: number, lon: number, zoom: number };
+  customAlgorithms: CustomAlgorithm[];
 }
 
 interface BenchmarkResult {
-  algorithm: string;
+  algorithmId: string;
+  algorithmName: string;
   time: number;
   distance: number;
   visited: number;
@@ -21,7 +22,7 @@ interface BenchmarkResult {
   successRate?: number;
 }
 
-export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, darkMode, onFetchRoads, isLoading, canFetch, customAlgorithmLoaded, viewport }) => {
+export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, darkMode, onFetchRoads, isLoading, canFetch, viewport, customAlgorithms }) => {
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [numPaths, setNumPaths] = useState<number>(100);
@@ -80,15 +81,15 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
     }
 
     const algorithmsToTest = [
-      { name: 'Dijkstra', type: AlgorithmType.DIJKSTRA },
-      { name: 'A*', type: AlgorithmType.A_STAR },
-      { name: 'BFS', type: AlgorithmType.BFS },
-      { name: 'DFS', type: AlgorithmType.DFS },
+      { name: 'Dijkstra', id: 'DIJKSTRA' },
+      { name: 'A*', id: 'A_STAR' },
+      { name: 'BFS', id: 'BFS' },
+      { name: 'DFS', id: 'DFS' },
     ];
     
-    if (customAlgorithmLoaded) {
-      algorithmsToTest.push({ name: 'Custom (Uploaded)', type: AlgorithmType.CUSTOM });
-    }
+    customAlgorithms.forEach(algo => {
+      algorithmsToTest.push({ name: algo.name, id: algo.id });
+    });
 
     const pathsToTest: { start: string, end: string }[] = [];
 
@@ -106,7 +107,7 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
 
     // Initialize aggregated results
     algorithmsToTest.forEach(algo => {
-      aggregatedResults[algo.name] = { time: 0, distance: 0, visited: 0, successCount: 0 };
+      aggregatedResults[algo.id] = { time: 0, distance: 0, visited: 0, successCount: 0 };
     });
 
     // Run tests for each path
@@ -114,12 +115,12 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
       // Standard algorithms
       for (const algo of algorithmsToTest) {
         try {
-          const result = findPath(currentGraph, start, end, algo.type, new Set());
+          const result = findPath(currentGraph, start, end, algo.id, new Set());
           if (result.path.length > 0) {
-            aggregatedResults[algo.name].time += result.executionTime;
-            aggregatedResults[algo.name].distance += result.totalDistance;
-            aggregatedResults[algo.name].visited += result.visitedOrder.length;
-            aggregatedResults[algo.name].successCount += 1;
+            aggregatedResults[algo.id].time += result.executionTime;
+            aggregatedResults[algo.id].distance += result.totalDistance;
+            aggregatedResults[algo.id].visited += result.visitedOrder.length;
+            aggregatedResults[algo.id].successCount += 1;
           }
         } catch (e) {
           // Ignore failures for averaging
@@ -129,10 +130,12 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
 
     // Calculate averages
     const newResults: BenchmarkResult[] = [];
-    for (const [name, data] of Object.entries(aggregatedResults)) {
+    for (const algo of algorithmsToTest) {
+      const data = aggregatedResults[algo.id];
       const successCount = data.successCount;
       newResults.push({
-        algorithm: name,
+        algorithmId: algo.id,
+        algorithmName: algo.name,
         time: successCount > 0 ? data.time / successCount : 0,
         distance: successCount > 0 ? data.distance / successCount : 0,
         visited: successCount > 0 ? Math.round(data.visited / successCount) : 0,
@@ -202,16 +205,24 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
         <p className="text-[10px] opacity-60 mb-2">Averages over {executedPathsCount} random paths</p>
         <div className={`p-3 rounded border space-y-3 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
           {(() => {
-            const displayAlgos = ['Dijkstra', 'A*', 'BFS', 'DFS'];
-            if (customAlgorithmLoaded) displayAlgos.push('Custom (Uploaded)');
+            const standardAlgos = [
+              { name: 'Dijkstra', id: 'DIJKSTRA' },
+              { name: 'A*', id: 'A_STAR' },
+              { name: 'BFS', id: 'BFS' },
+              { name: 'DFS', id: 'DFS' }
+            ];
             
-            // Sort so the successfully benchmarked ones appear prioritized if they exist,
-            // but if empty, maintains the standard order.
+            const displayAlgos = [...standardAlgos];
+            customAlgorithms.forEach(algo => {
+               displayAlgos.push({ name: algo.name, id: algo.id });
+            });
+            
+            // Sort list based on benchmark results if available
             let renderList = [...displayAlgos];
             if (results.length > 0) {
                 renderList.sort((a, b) => {
-                    const resA = results.find(r => r.algorithm === a);
-                    const resB = results.find(r => r.algorithm === b);
+                    const resA = results.find(r => r.algorithmId === a.id);
+                    const resB = results.find(r => r.algorithmId === b.id);
                     if (resA && resB) {
                         if (!resA.success && !resB.success) return 0;
                         if (!resA.success) return 1;
@@ -224,17 +235,18 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ graph, dar
                 });
             }
 
-            return renderList.map((algoName, idx) => {
-              const res = results.find(r => r.algorithm === algoName);
+            return renderList.map((algo, idx) => {
+              const res = results.find(r => r.algorithmId === algo.id);
               const hasRun = !!res;
+              const algoName = algo.name;
               
               return (
               <div key={idx} className={`p-2 rounded border ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className={`font-bold text-sm ${algoName.includes('Custom') ? 'text-indigo-500' : (darkMode ? 'text-gray-200' : 'text-gray-800')}`}>
+                <div className="flex justify-between items-center mb-1 gap-2">
+                  <span className={`font-bold text-sm truncate ${algo.id.startsWith('custom') ? 'text-indigo-500' : (darkMode ? 'text-gray-200' : 'text-gray-800')}`}>
                     {algoName}
                   </span>
-                  <span className={`text-xs font-bold ${!hasRun ? 'opacity-50' : (res.successRate !== undefined && res.successRate >= 50 ? 'text-green-500' : 'text-red-500')}`}>
+                  <span className={`text-xs font-bold whitespace-nowrap shrink-0 ${!hasRun ? 'opacity-50' : (res.successRate !== undefined && res.successRate >= 50 ? 'text-green-500' : 'text-red-500')}`}>
                     {!hasRun ? '-' : (res.successRate !== undefined ? `${res.successRate.toFixed(0)}% Success` : (res.success ? 'Success' : 'Failed'))}
                   </span>
                 </div>

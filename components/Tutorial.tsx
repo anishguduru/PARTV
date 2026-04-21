@@ -21,88 +21,99 @@ const STEPS: Step[] = [
   {
     title: "1. Welcome to PARTV",
     content: (
-      <p>
-        This tool allows you to visualize how computer algorithms find paths through real-world road networks.
-        <br /><br />
-        We use actual <strong>OpenStreetMap</strong> data. Let's take a quick tour of how to use it.
-      </p>
+      <div className="space-y-3">
+        <p>
+          <strong>PARTV</strong> (Pathfinding Algorithm RealTime Visualizer) allows you to see how famous algorithms navigate real-world road networks.
+        </p>
+        <p>
+          We use live <strong>OpenStreetMap</strong> data to build a routable graph of any location you choose.
+        </p>
+      </div>
     )
   },
   {
-    title: "2. Find & Download Roads",
+    title: "2. Finding a Location",
     content: (
-      <p>
-        Use the <strong>Find Place</strong> search bar to jump to any city worldwide. 
-        <br /><br />
-        Once you've found a location, zoom in until the <strong>Current View</strong> status says "Ready to Load", then click <strong>Load Roads Here</strong> to download the road network.
-      </p>
+      <div className="space-y-3">
+        <p>
+          Explore the world map by <strong>panning</strong> (clicking and dragging) and <strong>zooming</strong> (using your scroll wheel or pinch-to-zoom).
+        </p>
+        <p>
+          Zoom in until the status in the sidebar confirms the area is small enough to load. Click <strong>Load Roads Here</strong> to download the network data for your current view.
+        </p>
+      </div>
     )
   },
   {
-    title: "3. Choose an Algorithm",
+    title: "3. App Modes (Normal vs Dev)",
     content: (
-      <ul className="list-disc pl-4 space-y-2">
-        <li><strong>Dijkstra:</strong> Guarantees the shortest path. The standard for navigation.</li>
-        <li><strong>A*:</strong> Uses heuristics (distance to target) to find the path much faster.</li>
-        <li><strong>BFS:</strong> Explores layer by layer (ignoring distance). Good for unweighted graphs.</li>
-        <li><strong>DFS:</strong> Explores deep fast. Not optimal for paths, but interesting to watch.</li>
-      </ul>
+      <div className="space-y-3">
+        <p>
+          The app features two distinct modes:
+        </p>
+        <ul className="list-disc pl-4 space-y-2">
+          <li><strong>Normal Mode:</strong> Focuses on interactive visualization. Set points, block roads, and watch the search happen.</li>
+          <li><strong>Dev Mode:</strong> Advanced tools for developers to upload custom code and run objective benchmarks.</li>
+        </ul>
+      </div>
     )
   },
   {
-    title: "4. Interaction Modes",
+    title: "4. Interaction & Routing",
     content: (
-        <div>
-            <p className="mb-2">Select a tool to interact with the map:</p>
-            <ul className="list-disc pl-4 space-y-2">
-                <li><span className="font-bold text-green-500">Set Start</span>: Click on the map to set where the path begins.</li>
-                <li><span className="font-bold text-red-500">Set Target</span>: Click on the map to set your destination.</li>
-                <li><span className="font-bold text-orange-500">Block Road</span>: Click on road segments to create obstacles like traffic or construction.</li>
-            </ul>
-        </div>
+      <div className="space-y-3">
+        <p>Select a tool and click/tap the map:</p>
+        <ul className="list-disc pl-4 space-y-2">
+          <li><span className="font-bold text-green-500">Set Start</span>: Where the path begins.</li>
+          <li><span className="font-bold text-red-500">Set Target</span>: Your final destination.</li>
+          <li><span className="font-bold text-amber-500">Waypoint</span>: An intermediate stop between start and target.</li>
+          <li><span className="font-bold text-orange-500">Block Road</span>: Simulate construction or click an existing blockage to remove it.</li>
+        </ul>
+      </div>
     )
   },
   {
-    title: "5. Simulation Speed & Run",
+    title: "5. Custom Algorithms",
     content: (
-      <p>
-        Adjust the <strong>Simulation Speed</strong> slider to control how fast the algorithm executes. Lower speeds help you understand the search pattern, while higher speeds are better for long distances.
-        <br /><br />
-        Click <strong>Visualize Path</strong> to start the animation!
-      </p>
+      <div className="space-y-3">
+        <p>
+          In <strong>Dev Mode</strong>, you can download the <strong>Custom Script Instructions</strong> to see the API signature.
+        </p>
+        <p>
+          Upload your own <code>.js</code> file to see your logic animated on real maps! You can upload multiple algorithms and select them from the dropdown.
+        </p>
+      </div>
     )
   },
   {
-    title: "6. Performance Stats",
+    title: "6. Benchmarking",
     content: (
-      <p>
-        After the path is found, check the stats panel to see:
-        <br /><br />
-        • <strong>Distance:</strong> Total length of the found path.<br />
-        • <strong>Explored:</strong> How many nodes the algorithm visited.<br />
-        • <strong>Time:</strong> The actual execution time to calculate the path.
-      </p>
+      <div className="space-y-3">
+        <p>
+          Available in <strong>Dev Mode</strong>, the Benchmarking Panel runs thousands of random paths and calculates average <strong>Execution Time</strong>, <strong>Distance</strong>, and <strong>Success Rate</strong> for every algorithm.
+        </p>
+        <p>
+          It's the ultimate way to prove which search strategy is actually the most efficient.
+        </p>
+      </div>
     )
   },
   {
-    title: "7. Benchmarking",
+    title: "7. Animation & Stats",
     content: (
-      <p>
-        Want to see which algorithm is the best? 
-        <br /><br />
-        Open the <strong>Benchmarking Panel</strong> on the right side of the screen to run all algorithms simultaneously and compare their performance metrics side-by-side.
-      </p>
-    )
-  },
-  {
-    title: "8. Map Navigation",
-    content: (
-      <p>
-        • <strong>Pan:</strong> Click and drag to move around the map.<br />
-        • <strong>Zoom:</strong> Use your mouse scroll wheel or pinch-to-zoom on touch devices.<br />
-        <br />
-        You're all set! Close this tutorial to start exploring.
-      </p>
+      <div className="space-y-3">
+        <p>
+          Adjust the <strong>Simulation Speed</strong> to see how the "frontier" expands. Once finished, check the <strong>Results</strong> panel for:
+        </p>
+        <p className="pl-2">
+          • <strong>Distance:</strong> Total path length.<br />
+          • <strong>Explored:</strong> Search effort (node count).<br />
+          • <strong>Time:</strong> Raw compute latency.
+        </p>
+        <p className="pt-2">
+          You're all set! Close this tutorial to start exploring the world's road networks.
+        </p>
+      </div>
     )
   }
 ];
@@ -143,8 +154,8 @@ export const Tutorial: React.FC<TutorialProps> = ({ isActive, onClose, darkMode 
   let cardStyle: React.CSSProperties = {
     position: 'fixed',
     zIndex: 9999,
-    width: '320px',
-    height: '380px',
+    width: '450px',
+    height: '500px',
     maxWidth: 'calc(100vw - 24px)',
     maxHeight: '80vh',   // Prevent card from being taller than viewport
     top: '50%',
